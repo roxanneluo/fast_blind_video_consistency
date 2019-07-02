@@ -9,7 +9,7 @@ from torch.utils.data.sampler import Sampler
 from torch.utils.data import DataLoader
 
 ### custom lib
-from networks.resample2d_package.modules.resample2d import Resample2d
+#from networks.resample2d_package.modules.resample2d import Resample2d
 
 FLO_TAG = 202021.25
 EPS = 1e-12
@@ -86,7 +86,7 @@ def load_model(model, optimizer, opts, epoch):
     model_filename = os.path.join(opts.model_dir, "model_epoch_%d.pth" %epoch)
     print("Load %s" %model_filename)
     state_dict = torch.load(model_filename)
-    
+
     model.load_state_dict(state_dict['model'])
     optimizer.load_state_dict(state_dict['optimizer'])
 
@@ -135,12 +135,12 @@ def create_data_loader(data_set, opts, mode):
 
 
 def learning_rate_decay(opts, epoch):
-    
+
     ###             1 ~ offset              : lr_init
     ###        offset ~ offset + step       : lr_init * drop^1
     ### offset + step ~ offset + step * 2   : lr_init * drop^2
     ###              ...
-    
+
     if opts.lr_drop == 0: # constant learning rate
         decay = 0
     else:
@@ -185,7 +185,7 @@ def rotate_image(img, degree, interp=cv2.INTER_LINEAR):
     rotation_mat[1, 2] += bound_h/2 - image_center[1]
 
     img_out = cv2.warpAffine(img, rotation_mat, (bound_w, bound_h), flags=interp+cv2.WARP_FILL_OUTLIERS)
-  
+
     return img_out
 
 
@@ -225,7 +225,7 @@ def read_img(filename, grayscale=0):
             raise Exception("Image %s does not exist" %filename)
 
         img = img[:, :, ::-1] ## BGR to RGB
-    
+
     img = np.float32(img) / 255.0
 
     return img
@@ -236,7 +236,7 @@ def save_img(img, filename):
 
     if img.ndim == 3:
         img = img[:, :, ::-1] ### RGB to BGR
-    
+
     ## clip to [0, 1]
     img = np.clip(img, 0, 1)
 
@@ -254,14 +254,14 @@ def read_flo(filename):
 
     with open(filename, 'rb') as f:
         tag = np.fromfile(f, np.float32, count=1)
-        
+
         if tag != FLO_TAG:
             sys.exit('Wrong tag. Invalid .flo file %s' %filename)
         else:
             w = int(np.fromfile(f, np.int32, count=1))
             h = int(np.fromfile(f, np.int32, count=1))
             #print 'Reading %d x %d flo file' % (w, h)
-                
+
             data = np.fromfile(f, np.float32, count=2*w*h)
 
             # Reshape data into 3D array (columns, rows, bands)
@@ -282,7 +282,7 @@ def save_flo(flow, filename):
         w.tofile(f)
         h.tofile(f)
         flow.tofile(f)
-    
+
 def resize_flow(flow, W_out=0, H_out=0, scale=0):
 
     if W_out == 0 and H_out == 0 and scale == 0:
@@ -307,7 +307,7 @@ def resize_flow(flow, W_out=0, H_out=0, scale=0):
 
 
 def rotate_flow(flow, degree, interp=cv2.INTER_LINEAR):
-    
+
     ## angle in radian
     angle = math.radians(degree)
 
@@ -317,7 +317,7 @@ def rotate_flow(flow, degree, interp=cv2.INTER_LINEAR):
     #rotation_matrix = cv2.getRotationMatrix2D((W/2, H/2), math.degrees(angle), 1)
     #flow_out = cv2.warpAffine(flow, rotation_matrix, (W, H))
     flow_out = rotate_image(flow, degree, interp)
-    
+
     fu = flow_out[:, :, 0] * math.cos(-angle) - flow_out[:, :, 1] * math.sin(-angle)
     fv = flow_out[:, :, 0] * math.sin(-angle) + flow_out[:, :, 1] * math.cos(-angle)
 
@@ -489,7 +489,7 @@ def compute_flow_gradients(flow):
     flow_x_dv = np.zeros((H, W))
     flow_y_du = np.zeros((H, W))
     flow_y_dv = np.zeros((H, W))
-    
+
     flow_x = flow[:, :, 0]
     flow_y = flow[:, :, 1]
 
@@ -502,11 +502,11 @@ def compute_flow_gradients(flow):
 
 
 def detect_occlusion(fw_flow, bw_flow):
-    
+
     ## fw-flow: img1 => img2
     ## bw-flow: img2 => img1
 
-    
+
     with torch.no_grad():
 
         ## convert to tensor
@@ -516,7 +516,7 @@ def detect_occlusion(fw_flow, bw_flow):
         ## warp fw-flow to img2
         flow_warping = Resample2d().cuda()
         fw_flow_w = flow_warping(fw_flow_t, bw_flow_t)
-    
+
         ## convert to numpy array
         fw_flow_w = tensor2img(fw_flow_w)
 
@@ -528,12 +528,12 @@ def detect_occlusion(fw_flow, bw_flow):
     bw_flow_mag = compute_flow_magnitude(bw_flow)
 
     mask1 = fb_flow_mag > 0.01 * (fw_flow_w_mag + bw_flow_mag) + 0.5
-    
+
     ## motion boundary
     fx_du, fx_dv, fy_du, fy_dv = compute_flow_gradients(bw_flow)
     fx_mag = fx_du ** 2 + fx_dv ** 2
     fy_mag = fy_du ** 2 + fy_dv ** 2
-    
+
     mask2 = (fx_mag + fy_mag) > 0.01 * bw_flow_mag + 0.002
 
     ## combine mask
@@ -552,7 +552,7 @@ def save_vector_to_txt(matrix, filename):
     with open(filename, 'w') as f:
 
         print("Save %s" %filename)
-        
+
         for i in range(matrix.size):
             line = "%f" %matrix[i]
             f.write("%s\n"%line)

@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 
 ### custom lib
-from networks.resample2d_package.modules.resample2d import Resample2d
+#from networks.resample2d_package.modules.resample2d import Resample2d
 import networks
 import utils
 
@@ -22,14 +22,14 @@ if __name__ == "__main__":
     ### dataset options
     parser.add_argument('-dataset',         type=str,     required=True,            help='dataset to test')
     parser.add_argument('-phase',           type=str,     default="test",           choices=["train", "test"])
-    parser.add_argument('-data_dir',        type=str,     default='data',           help='path to data folder')
+    parser.add_argument('-data_dir',        type=str,     default='data/data',           help='path to data folder')
     parser.add_argument('-list_dir',        type=str,     default='lists',          help='path to list folder')
     parser.add_argument('-task',            type=str,     required=True,            help='evaluated task')
     parser.add_argument('-redo',            action="store_true",                    help='Re-generate results')
 
     ### other options
     parser.add_argument('-gpu',             type=int,     default=0,                help='gpu device id')
-    
+
     opts = parser.parse_args()
     opts.cuda = True
 
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     ### load model opts
     opts_filename = os.path.join('pretrained_models', "ECCV18_blind_consistency_opts.pth")
     print("Load %s" %opts_filename)
-    with open(opts_filename, 'r') as f:
+    with open(opts_filename, 'rb') as f:
         model_opts = pickle.load(f)
 
 
@@ -87,44 +87,49 @@ if __name__ == "__main__":
         output_dir = os.path.join(opts.data_dir, opts.phase, "ECCV18", opts.task, opts.dataset, video)
         if not os.path.isdir(output_dir):
             os.makedirs(output_dir)
-            
 
-        frame_list = glob.glob(os.path.join(input_dir, "*.jpg"))
-        output_list = glob.glob(os.path.join(output_dir, "*.jpg"))
+
+        frame_list = sorted(glob.glob(os.path.join(input_dir, "*.png")))
+        frame_names = [os.path.basename(fn) for fn in frame_list]
+        output_list = glob.glob(os.path.join(output_dir, "*.png"))
 
         if len(frame_list) == len(output_list) and not opts.redo:
             print("Output frames exist, skip...")
             continue
 
-
+        def gray_filter(im):
+            im[:,:,0]=0; im[:,:,2]=0
+            return im
         ## frame 0
-        frame_p1 = utils.read_img(os.path.join(process_dir, "00000.jpg"))
-        output_filename = os.path.join(output_dir, "00000.jpg")
+        frame_p1 = utils.read_img(os.path.join(process_dir, frame_names[0]))
+        frame_p1 = gray_filter(frame_p1)
+        output_filename = os.path.join(output_dir, frame_names[0])
         utils.save_img(frame_p1, output_filename)
 
         lstm_state = None
 
         for t in range(1, len(frame_list)):
-                
+
             ### load frames
-            frame_i1 = utils.read_img(os.path.join(input_dir, "%05d.jpg" %(t - 1)))
-            frame_i2 = utils.read_img(os.path.join(input_dir, "%05d.jpg" %(t)))
-            frame_o1 = utils.read_img(os.path.join(output_dir, "%05d.jpg" %(t - 1)))
-            frame_p2 = utils.read_img(os.path.join(process_dir, "%05d.jpg" %(t)))
-            
+            frame_i1 = utils.read_img(os.path.join(input_dir, frame_names[t - 1]))
+            frame_i2 = utils.read_img(os.path.join(input_dir, frame_names[t]))
+            frame_o1 = utils.read_img(os.path.join(output_dir, frame_names[t - 1]))
+            frame_p2 = utils.read_img(os.path.join(process_dir, frame_names[t]))
+            frame_o1 = gray_filter(frame_o1)
+            frame_p2 = gray_filter(frame_p2)
             ### resize image
             H_orig = frame_p2.shape[0]
             W_orig = frame_p2.shape[1]
 
             H_sc = int(math.ceil(float(H_orig) / opts.size_multiplier) * opts.size_multiplier)
             W_sc = int(math.ceil(float(W_orig) / opts.size_multiplier) * opts.size_multiplier)
-                
+
             frame_i1 = cv2.resize(frame_i1, (W_sc, H_sc))
             frame_i2 = cv2.resize(frame_i2, (W_sc, H_sc))
             frame_o1 = cv2.resize(frame_o1, (W_sc, H_sc))
             frame_p2 = cv2.resize(frame_p2, (W_sc, H_sc))
 
-            
+
             with torch.no_grad():
 
                 ### convert to tensor
@@ -132,13 +137,13 @@ if __name__ == "__main__":
                 frame_i2 = utils.img2tensor(frame_i2).to(device)
                 frame_o1 = utils.img2tensor(frame_o1).to(device)
                 frame_p2 = utils.img2tensor(frame_p2).to(device)
-                
+
                 ### model input
                 inputs = torch.cat((frame_p2, frame_o1, frame_i2, frame_i1), dim=1)
-                
+
                 ### forward
                 ts = time.time()
-                
+
                 output, lstm_state = model(inputs, lstm_state)
                 frame_o2 = frame_p2 + output
 
@@ -146,22 +151,22 @@ if __name__ == "__main__":
                 times.append(te - ts)
 
                 ## create new variable to detach from graph and avoid memory accumulation
-                lstm_state = utils.repackage_hidden(lstm_state) 
+                lstm_state = utils.repackage_hidden(lstm_state)
 
 
             ### convert to numpy array
             frame_o2 = utils.tensor2img(frame_o2)
-            
+
             ### resize to original size
             frame_o2 = cv2.resize(frame_o2, (W_orig, H_orig))
-            
+
             ### save output frame
-            output_filename = os.path.join(output_dir, "%05d.jpg" %(t))
+            output_filename = os.path.join(output_dir, frame_names[t])
             utils.save_img(frame_o2, output_filename)
-                    
+
         ## end of frame
     ## end of video
-                    
+
 
     if len(times) > 0:
         time_avg = sum(times) / len(times)

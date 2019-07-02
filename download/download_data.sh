@@ -13,28 +13,29 @@ if [[ $SET != "train" && $SET != "test" && $SET != "all" && $SET != "results" ]]
 fi
 
 URL=http://vllab1.ucmerced.edu/~wlai24/video_consistency/data
+DATA_DIR=data
 
 if [[ $SET == "train" ]]; then
     wget -N $URL/train.zip
-    unzip train.zip
+    unzip train.zip -d ${DATA_DIR}
 fi
 
 
 if [[ $SET == "test" ]]; then
     wget -N $URL/test.zip
-    unzip test.zip
+    unzip test.zip -d ${DATA_DIR}
 fi
 
 
 if [[ $SET == "all" ]]; then
     wget -N $URL/train.zip
-    unzip train.zip
+    unzip train.zip -d ${DATA_DIR}
 
     wget -N $URL/test.zip
-    unzip test.zip
+    unzip test.zip -d ${DATA_DIR}
 fi
 
 if [[ $SET == "results" ]]; then
     wget -N $URL/results.zip
-    unzip results.zip
+    unzip results.zip -d ${DATA_DIR}
 fi
